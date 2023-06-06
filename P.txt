@@ -1,0 +1,328 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © LonesomeTheBlue
+
+//@version=5
+indicator('Trend Reversal System with SR levels', overlay=true, max_bars_back=1100)
+
+showsupres = input(defval=true, title='Show Support/Resistance', inline = "srlevel")
+supcolor = input.color(defval=color.lime, title='', inline = "srlevel")
+rescolor = input.color(defval=color.red, title='', inline = "srlevel")
+showsu = input(defval=true, title='Show Setup', inline = "setup")
+showsudet = input(defval=false, title='Show Details', inline = "setup")
+showcd = input(defval=true, title='Show Counts', inline = "count")
+showcddet = input(defval=false, title='Show Details', inline = "count")
+showrl = input(defval=false, title='Show Risk Levels and Targets')
+showlab = input(defval=false, title='Show Buy/Sell Labels')
+aprch = input.string(defval='Conservative', title='Counts Entry Approach', options=['Conservative', 'Aggressive'])
+aprchsetupp = input.string(defval='Conservative', title='Setup Entry Approach', options=['Conservative', 'Aggressive'])
+expect = input.float(defval=1.5, title='expectation %', minval=.1, step=.1)
+
+// Setup
+setupbuy = 0
+setupsell = 0
+setupbuy := close < nz(close[4]) ? nz(setupbuy[1]) + 1 : 0
+setupsell := close > nz(close[4]) ? nz(setupsell[1]) + 1 : 0
+
+perfbuy = low <= nz(low[2]) and low <= nz(low[3]) or nz(low[1]) <= nz(low[2]) and nz(low[1]) <= nz(low[3])
+perfsell = high >= nz(high[2]) and high >= nz(high[3]) or nz(high[1]) >= nz(high[2]) and nz(high[1]) >= nz(high[3])
+
+setupnum = math.max(setupsell, setupbuy)
+setupcol = setupsell > 0 ? color.red : color.green
+plotchar(setupnum == 1 and showsu and showsudet, char='1', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 2 and showsu and showsudet, char='2', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 3 and showsu and showsudet, char='3', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 4 and showsu and showsudet, char='4', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 5 and showsu and showsudet, char='5', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 6 and showsu and showsudet, char='6', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 7 and showsu and showsudet, char='7', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 8 and showsu and showsudet, char='8', color=setupcol, location=location.abovebar)
+plotchar(setupnum == 9 and showsu, char='9', color=setupcol, location=location.abovebar)
+plotshape(setupbuy == 9 and perfbuy and showsu, text='S', title='Perfected', style=shape.labelup, color=color.new(color.lime, 0), textcolor=color.new(color.black, 0), size=size.normal, location=location.belowbar)
+plotshape(setupsell == 9 and perfsell and showsu, text='S', title='Perfected', style=shape.labeldown, color=color.new(color.red, 0), textcolor=color.new(color.white, 0), size=size.normal, location=location.abovebar)
+
+float setupsupport = na
+setupsupport := setupsupport[1]
+bool showsupport = na
+showsupport := nz(showsupport[1], true)
+float setupresistance = na
+setupresistance := setupresistance[1]
+bool showresistance = na
+showresistance := nz(showresistance[1], true)
+hh = ta.highest(high, 9)
+setupresistance := setupbuy == 9 ? hh : setupresistance[1]
+showresistance := setupbuy == 9 ? true : showresistance
+ll = ta.lowest(low, 9)
+setupsupport := setupsell == 9 ? ll : setupsupport[1]
+showsupport := setupsell == 9 ? true : showsupport
+
+// Count
+setupbuycountexist = false
+setupbuycountexist := setupbuy == 9 ? true : nz(setupbuycountexist[1], false)
+setupsellcountexist = false
+setupsellcountexist := setupsell == 9 ? true : nz(setupsellcountexist[1], false)
+// low of the bar 13 must also be less than or equal to the close of bar 8,
+// high of the bar 13 must also be greater than or equal to the close of bar 8, so keep it
+float bar8 = na
+bar8 := nz(bar8[1])
+
+setupbuycount = 0
+setupbuycount := nz(setupbuycount[1])
+setupsellcount = 0
+setupsellcount := nz(setupsellcount[1])
+setupbuycount := setupbuycountexist and close <= nz(low[2]) and (setupbuycount < 12 or setupbuycount == 12 and low <= bar8) ? setupbuycount + 1 : setupbuycount
+setupsellcount := setupsellcountexist and close >= nz(high[2]) and (setupsellcount < 12 or setupsellcount == 12 and high >= bar8) ? setupsellcount + 1 : setupsellcount
+trs13doesntmeet = setupbuycountexist and close <= nz(low[2]) and setupbuycount == 12 and nz(setupbuycount[1]) != 11 and low > bar8 or setupsellcountexist and close >= nz(high[2]) and setupsellcount == 12 and nz(setupsellcount[1]) != 11 and high < bar8
+
+// keep true range for count cancellation
+float trbuymain = na
+float trsellmain = na
+float trbuy = na
+float trsell = na
+trbuy := setupbuy == 9 ? math.abs(hh - ll) : nz(trbuy[1], 0)
+trbuymain := setupbuycount == 1 and ta.change(setupbuycount) ? trbuy : nz(trbuymain[1], 0)
+trsell := setupsell == 9 ? math.abs(hh - ll) : nz(trsell[1], 0)
+trsellmain := setupsellcount == 1 and ta.change(setupsellcount) ? trsell : nz(trsellmain[1], 0)
+
+// keep highest close and lowest close for count cancellation
+float hlastmain = na
+float llastmain = na
+float hlast = na
+float llast = na
+hlast := setupbuy == 9 or setupsell == 9 ? hh : nz(hlast[1], 0)
+hlastmain := setupbuycount == 1 and ta.change(setupbuycount) ? hlast : nz(hlastmain[1], 0)
+llast := setupbuy == 9 or setupsell == 9 ? ll : nz(llast[1], 0)
+llastmain := setupsellcount == 1 and ta.change(setupsellcount) ? llast : nz(llastmain[1], 0)
+
+hclose = ta.highest(close, 9)
+lclose = ta.lowest(close, 9)
+
+//count cancellation
+recycle = false
+cancelled = false
+if setupbuycountexist
+    if setupbuycount > 1 and setupbuy == 9 and trbuy >= trbuymain and trbuy < trbuymain * 1.618  // recycle
+        setupbuycount := 1
+        recycle := true
+        trbuymain := trbuy
+        hlastmain := hlast
+        llastmain := llast
+        llastmain
+    if low > setupresistance or setupsell == 9 or setupbuycount > 1 and setupbuy == 9 and hclose - lclose > hlastmain - llastmain
+        setupbuycount := 0
+        setupbuycountexist := false
+        cancelled := true
+        cancelled
+
+if setupsellcountexist
+    if setupsellcount > 1 and setupsell == 9 and trsell >= trsellmain and trsell < trsellmain * 1.618  // recycle 
+        setupsellcount := 1
+        recycle := true
+        trsellmain := trsell
+        hlastmain := hlast
+        llastmain := llast
+        llastmain
+    if high < setupsupport or setupbuy == 9 or setupsellcount > 1 and setupsell == 9 and hclose - lclose > hlastmain - llastmain
+        setupsellcount := 0
+        setupsellcountexist := false
+        cancelled := true
+        cancelled
+
+// bar8 assing
+bar8 := setupbuycount == 8 and ta.change(setupbuycount) > 0 or setupsellcount == 8 and ta.change(setupsellcount) > 0 ? close : nz(bar8[1])
+
+shbuyc = setupbuycount != nz(setupbuycount[1])
+shsellc = setupsellcount != nz(setupsellcount[1])
+cdcol = setupbuycount > 0 ? color.green : setupsellcount > 0 ? color.red : color.black
+mynum = setupbuycount != 0 and shbuyc ? setupbuycount : setupsellcount != 0 and shsellc ? setupsellcount : 0
+plotchar(mynum == 1 and not recycle and showcd and showcddet, char='', text='\n1', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 1 and recycle and showcd and showcddet, char='', text='\n1\nR', textcolor=color.new(color.blue, 0), location=location.belowbar)
+plotchar(mynum == 2 and showcd and showcddet, char='', text='\n2', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 3 and showcd and showcddet, char='', text='\n3', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 4 and showcd and showcddet, char='', text='\n4', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 5 and showcd and showcddet, char='', text='\n5', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 6 and showcd and showcddet, char='', text='\n6', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 7 and showcd and showcddet, char='', text='\n7', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 8 and showcd and showcddet, char='', text='\n8', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 9 and showcd and showcddet, char='', text='\n9', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 10 and showcd and showcddet, char='', text='\n10', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 11 and showcd and showcddet, char='', text='\n11', textcolor=cdcol, location=location.belowbar)
+plotchar(mynum == 12 and showcd and showcddet, char='', text='\n12', textcolor=cdcol, location=location.belowbar)
+plotshape(trs13doesntmeet and showcd and showcddet, title='+', style=shape.cross, color=cdcol, location=location.belowbar)
+plotshape(cancelled and showcd and showcddet, title='CD cancelled', style=shape.xcross, color=color.new(color.red, 0), location=location.belowbar)
+plotshape(setupbuycount == 13 and shbuyc and showcd, text='C', title='13', style=shape.labelup, color=color.new(color.yellow, 0), textcolor=color.new(color.black, 0), size=size.large, location=location.belowbar)
+plotshape(setupsellcount == 13 and shsellc and showcd, text='C', title='13', style=shape.labeldown, color=color.new(color.maroon, 0), textcolor=color.new(color.white, 0), size=size.normal, location=location.abovebar)
+
+// Setup Buy/Sell and risc levels
+// buy risc level
+float tbuylo1 = na
+float tbuylo2 = na
+tbuylo1 := setupbuy == 1 and ta.change(setupbuy) ? low : nz(tbuylo1[1])
+tbuylo2 := setupbuy == 1 and ta.change(setupbuy) ? low - ta.tr : nz(tbuylo2[1])
+if setupbuy >= 1
+    if low < tbuylo1
+        tbuylo1 := low
+        tbuylo2 := low - ta.tr
+        tbuylo2
+// sell risc level
+float tsellhi1 = na
+float tsellhi2 = na
+tsellhi1 := setupsell == 1 and ta.change(setupsell) ? high : nz(tsellhi1[1])
+tsellhi2 := setupsell == 1 and ta.change(setupsell) ? high + ta.tr : nz(tsellhi2[1])
+if setupsell >= 1
+    if high > tsellhi1
+        tsellhi1 := high
+        tsellhi2 := high + ta.tr
+        tsellhi2
+
+float tbuyrisclevel = na
+float tsellrisclevel = na
+tbuyrisclevel := setupbuy == 9 and perfbuy ? tbuylo2 : nz(tbuyrisclevel[1])
+tbuyrisclevel := close < tbuyrisclevel or open < tbuyrisclevel or setupsell == 9 ? na : tbuyrisclevel
+tsellrisclevel := setupsell == 9 and perfsell ? tsellhi2 : nz(tsellrisclevel[1])
+tsellrisclevel := close > tsellrisclevel or open > tsellrisclevel or setupbuy == 9 ? na : tsellrisclevel
+
+float setupbuytarget = na
+float setupselltarget = na
+setupbuytarget := setupbuy == 9 and perfbuy ? setupresistance : nz(setupbuytarget[1])
+setupbuytarget := close > setupbuytarget or na(tbuyrisclevel) ? na : setupbuytarget
+tbuyrisclevel := na(setupbuytarget) ? na : tbuyrisclevel
+setupselltarget := setupsell == 9 and perfsell ? setupsupport : nz(setupselltarget[1])
+setupselltarget := close < setupselltarget or na(tsellrisclevel) ? na : setupselltarget
+tsellrisclevel := na(setupselltarget) ? na : tsellrisclevel
+
+plot(showrl ? nz(tbuyrisclevel) != 0 ? tbuyrisclevel : nz(tsellrisclevel) != 0 ? tsellrisclevel : na : na, color=showrl ? color.black : na, style=plot.style_circles, linewidth=1)
+plot(showrl ? nz(setupbuytarget) != 0 ? setupbuytarget : nz(setupselltarget) != 0 ? setupselltarget : na : na, color=showrl ? color.blue : na, linewidth=2, style=plot.style_circles)
+
+// much more conservative buy
+CamouflageBuy = close < nz(close[1]) and close > open and low < nz(low[2])
+ClopBuy = open < nz(open[1]) and open < nz(close[1]) and close > nz(open[1]) and close > nz(close[1])
+ClopwinBuy = math.max(open, close) <= math.max(nz(open[1]), nz(close[1])) and math.min(open, close) >= math.min(nz(open[1]), nz(close[1])) and close > nz(close[1])
+OpenBuy = open < nz(low[1]) and close > nz(low[1])
+TrapBuy = open >= math.min(nz(open[1]), nz(close[1])) and close > nz(high[1])
+
+// much more conservative sell
+CamouflageSell = close > nz(close[1]) and close < open and high > nz(high[2])
+ClopSell = open > nz(open[1]) and open > nz(close[1]) and close < nz(open[1]) and close < nz(close[1])
+ClopwinSell = math.max(open, close) <= math.max(nz(open[1]), nz(close[1])) and math.min(open, close) >= math.min(nz(open[1]), nz(close[1])) and close < nz(close[1])
+OpenSell = open > nz(high[1]) and close < nz(high[1])
+TrapSell = open >= math.min(nz(open[1]), nz(close[1])) and close < nz(low[1])
+
+conservativebuy = CamouflageBuy or ClopBuy or ClopwinBuy or OpenBuy or TrapBuy
+conservativesell = CamouflageSell or ClopSell or ClopwinSell or OpenSell or TrapSell
+
+// check risc and decide to enter buy/sell position // // suggested expectation: expectation should be more than 1.5 * risc
+closetoSR = setupbuy == 9 ? math.abs(setupresistance - close) : setupsell == 9 ? math.abs(close - setupsupport) : 0
+TRSsetupbuy = (aprchsetupp == 'Aggressive' or conservativebuy) and setupbuy == 9 and closetoSR > 0 and closetoSR > math.abs(close - tbuyrisclevel) * expect
+TRSsetupsell = (aprchsetupp == 'Aggressive' or conservativesell) and setupsell == 9 and closetoSR > 0 and closetoSR > math.abs(close - tsellrisclevel) * expect
+
+//count Buy/Sell and risc levels
+// buy risc level
+float buylo1 = na
+float buylo2 = na
+float ctbuytarget = na
+buylo1 := setupbuycount == 1 and ta.change(setupbuycount) ? low : nz(buylo1[1])
+buylo2 := setupbuycount == 1 and ta.change(setupbuycount) ? low - ta.tr : nz(buylo2[1])
+ctbuytarget := setupbuycount == 1 and ta.change(setupbuycount) ? high : nz(ctbuytarget[1])
+if setupbuycount >= 1
+    if low < buylo1
+        buylo1 := low
+        buylo2 := low - ta.tr
+        buylo2
+    if high > ctbuytarget
+        ctbuytarget := high
+        ctbuytarget
+// sell risc level
+float sellhi1 = na
+float sellhi2 = na
+float ctselltarget = na
+sellhi1 := setupsellcount == 1 and ta.change(setupsellcount) ? high : nz(sellhi1[1])
+sellhi2 := setupsellcount == 1 and ta.change(setupsellcount) ? high + ta.tr : nz(sellhi2[1])
+ctselltarget := setupsellcount == 1 and ta.change(setupsellcount) ? low : nz(ctselltarget[1])
+if setupsellcount >= 1
+    if high > sellhi1
+        sellhi1 := high
+        sellhi2 := high + ta.tr
+        sellhi2
+    if low < ctselltarget
+        ctselltarget := low
+        ctselltarget
+
+float buyrisclevel = na
+float sellrisclevel = na
+buyrisclevel := setupbuycount == 13 ? buylo2 : nz(buyrisclevel[1])
+buyrisclevel := close < buyrisclevel or open < buyrisclevel or setupsellcount == 13 ? na : buyrisclevel
+sellrisclevel := setupsellcount == 13 ? sellhi2 : nz(sellrisclevel[1])
+sellrisclevel := close > sellrisclevel or open > sellrisclevel or setupbuycount == 13 ? na : sellrisclevel
+
+float cdbuytarget = na
+float cdselltarget = na
+cdbuytarget := setupbuycount == 13 ? ctbuytarget : nz(cdbuytarget[1])
+cdbuytarget := close > cdbuytarget or na(buyrisclevel) ? na : cdbuytarget
+buyrisclevel := na(cdbuytarget) ? na : buyrisclevel
+cdselltarget := setupsellcount == 13 ? ctselltarget : nz(cdselltarget[1])
+cdselltarget := close < cdselltarget or na(sellrisclevel) ? na : cdselltarget
+sellrisclevel := na(cdselltarget) ? na : sellrisclevel
+
+plot(showrl ? nz(buyrisclevel) != 0 ? buyrisclevel : nz(sellrisclevel) != 0 ? sellrisclevel : na : na, color=showrl ? color.black : na, style=plot.style_circles, linewidth=1)
+plot(showrl ? nz(cdbuytarget) != 0 ? cdbuytarget : nz(cdselltarget) != 0 ? cdselltarget : na : na, color=showrl ? color.blue : na, linewidth=2, style=plot.style_circles)
+
+// according to approach, decide where to buy/sell
+waitbuycondition = false
+waitbuycondition := nz(buyrisclevel) == 0 ? false : aprch == 'Conservative' and setupbuycount == 13 ? true : nz(waitbuycondition[1], false)
+waitsellcondition = false
+waitsellcondition := nz(sellrisclevel) == 0 ? false : aprch == 'Conservative' and setupsellcount == 13 ? true : nz(waitsellcondition[1], false)
+consbuycond = false
+if waitbuycondition and close > nz(close[4])
+    consbuycond := true
+    waitbuycondition := false
+    waitbuycondition
+conssellcond = false
+if waitsellcondition and close < nz(close[4])
+    conssellcond := true
+    waitsellcondition := false
+    waitsellcondition
+
+// check risc and decide to enter buy/sell position   // suggested expectation: expectation should be more than 1.5 * risc
+closetoSR := setupbuycount == 13 ? math.abs(ctbuytarget - close) : setupsellcount == 13 ? math.abs(close - ctselltarget) : 0
+cbuyexpected = false
+cbuyexpected := setupbuycount == 13 ? closetoSR > 0 and closetoSR > math.abs(close - buyrisclevel) * expect : nz(cbuyexpected[1], false)
+csellexpected = false
+csellexpected := setupsellcount == 13 ? closetoSR > 0 and closetoSR > math.abs(close - sellrisclevel) * expect : nz(csellexpected[1], false)
+TRScountbuy = (aprch == 'Aggressive' and setupbuycount == 13 or consbuycond) and cbuyexpected
+TRScountsell = (aprch == 'Aggressive' and setupsellcount == 13 or conssellcond) and csellexpected
+
+alertcondition(TRScountbuy or TRSsetupbuy, title='TRS Buy', message='TRS Buy')
+alertcondition(TRScountsell or TRSsetupsell, title='TRS Sell', message='TRS Sell')
+
+if showlab and (TRScountbuy or TRSsetupbuy)
+    ycoor = TRScountbuy ? cdbuytarget : setupresistance
+    riskline = TRScountbuy ? str.tostring(buyrisclevel) : str.tostring(tbuyrisclevel)
+    target = TRScountbuy ? str.tostring(cdbuytarget) : str.tostring(setupresistance)
+    txt = (TRScountbuy ? 'TRSCount Buy' : 'TRSSetup Buy') + '\n Target : ' + target + '\n Stop : ' + riskline
+    label.new(x=bar_index, y=ycoor, text=txt, color=color.lime, textcolor=color.black, style=label.style_label_down, xloc=xloc.bar_index, yloc=yloc.price)
+
+if showlab and (TRScountsell or TRSsetupsell)
+    ycoor = TRScountsell ? cdselltarget : setupsupport
+    riskline = TRScountsell ? str.tostring(sellrisclevel) : str.tostring(tsellrisclevel)
+    target = TRScountsell ? str.tostring(cdselltarget) : str.tostring(setupsupport)
+    txt = (TRScountsell ? 'TRSCount Sell' : 'TRSSetup Sell') + '\n Target : ' + target + '\n Stop : ' + riskline
+    label.new(x=bar_index, y=ycoor, text=txt, color=color.red, textcolor=color.white, style=label.style_label_up, xloc=xloc.bar_index, yloc=yloc.price)
+
+if setupbuycount == 13
+    setupbuycount := 0
+    setupbuycountexist := false
+    setupbuycountexist
+if setupsellcount == 13
+    setupsellcount := 0
+    setupsellcountexist := false
+    setupsellcountexist
+setupbuy := setupbuy == 9 ? 0 : setupbuy
+setupsell := setupsell == 9 ? 0 : setupsell
+
+// support /resistance
+showresistance := close > setupresistance ? false : showresistance
+showsupport := close < setupsupport ? false : showsupport
+
+plot(showsupres ? setupresistance : na, color=not showresistance ? na : rescolor, style=plot.style_circles, linewidth=2)
+plot(showsupres ? setupsupport : na, color=not showsupport ? na : supcolor, style=plot.style_circles, linewidth=2)
+
